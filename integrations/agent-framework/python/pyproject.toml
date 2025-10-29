@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "ag-ui-agent-framework"
+version = "0.1.0"
+description = "Production-ready AG-UI protocol integration for the Microsoft Agent Framework"
+authors = ["AG-UI Protocol Contributors <hello@ag-ui.com>"]
+readme = "README.md"
+packages = [
+    { include = "ag_ui_agent_framework" }
+]
+exclude = [
+    "ag_ui_agent_framework/examples/**",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.14"
+ag-ui-protocol = "==0.1.5"
+agent-framework = "==1.0.0b251016"
+fastapi = "^0.115.12"
+uvicorn = "^0.34.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
