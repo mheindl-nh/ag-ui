@@ -2,11 +2,9 @@
 This module contains the types for the Agent User Interaction Protocol Python SDK.
 """
 
-from typing import Annotated, Any, List, Literal, Optional, Union
-
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, List, Literal, Optional, Union, Annotated
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic.alias_generators import to_camel
-
 
 class ConfiguredBaseModel(BaseModel):
     """
@@ -16,6 +14,7 @@ class ConfiguredBaseModel(BaseModel):
         extra="forbid",
         alias_generator=to_camel,
         populate_by_name=True,
+        ser_json_by_alias=True
     )
 
 
@@ -32,7 +31,7 @@ class ToolCall(ConfiguredBaseModel):
     A tool call, modelled after OpenAI tool calls.
     """
     id: str
-    type: Literal["function"] = "function"  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal["function"]
     function: FunctionCall
 
 
@@ -50,7 +49,7 @@ class DeveloperMessage(BaseMessage):
     """
     A developer message.
     """
-    role: Literal["developer"] = "developer"  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal["developer"]
     content: str
 
 
@@ -58,7 +57,7 @@ class SystemMessage(BaseMessage):
     """
     A system message.
     """
-    role: Literal["system"] = "system"  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal["system"]
     content: str
 
 
@@ -66,7 +65,7 @@ class AssistantMessage(BaseMessage):
     """
     An assistant message.
     """
-    role: Literal["assistant"] = "assistant"  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal["assistant"]
     tool_calls: Optional[List[ToolCall]] = None
 
 
@@ -74,7 +73,7 @@ class UserMessage(BaseMessage):
     """
     A user message.
     """
-    role: Literal["user"] = "user" # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal["user"]
     content: str
 
 
@@ -83,16 +82,16 @@ class ToolMessage(ConfiguredBaseModel):
     A tool result message.
     """
     id: str
-    role: Literal["tool"] = "tool"
+    role: Literal["tool"]
     content: str
     tool_call_id: str
-    error: Optional[str] = None
 
 
 Message = Annotated[
     Union[DeveloperMessage, SystemMessage, AssistantMessage, UserMessage, ToolMessage],
     Field(discriminator="role")
 ]
+
 
 Role = Literal["developer", "system", "assistant", "user", "tool"]
 

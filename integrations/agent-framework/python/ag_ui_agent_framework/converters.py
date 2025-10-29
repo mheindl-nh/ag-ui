@@ -145,6 +145,7 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
                 tool_calls.append(
                     ToolCall(
                         id=call_id,
+                        type="function",
                         function=FunctionCall(
                             name=content.name or "tool",
                             arguments=content.arguments or "{}",
@@ -154,12 +155,13 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
             elif isinstance(content, FunctionResultContent):
                 tool_results.append(content)
 
-        aggregated_text = "\n".join(filter(None, (*text_parts, *reasoning_parts))) or None
+        aggregated_text = "\n".join(filter(None, text_parts)) or None
 
         if role == "assistant":
             converted.append(
                 AssistantMessage(
                     id=message_id,
+                    role="assistant",
                     content=aggregated_text,
                     tool_calls=tool_calls or None,
                     name=author_name,
@@ -171,6 +173,7 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
             converted.append(
                 UserMessage(
                     id=message_id,
+                    role="user",
                     content=aggregated_text or "",
                     name=author_name,
                 )
@@ -181,6 +184,7 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
             converted.append(
                 SystemMessage(
                     id=message_id,
+                    role="system",
                     content=aggregated_text or "",
                     name=author_name,
                 )
@@ -191,6 +195,7 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
             converted.append(
                 DeveloperMessage(
                     id=message_id,
+                    role="developer",
                     content=aggregated_text or "",
                     name=author_name,
                 )
@@ -202,6 +207,7 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
                 converted.append(
                     ToolMessage(
                         id=message_id,
+                        role="tool",
                         content=_stringify(result.result),
                         tool_call_id=result.call_id or _pick_tool_call_id(tool_calls),
                         error=_stringify(result.exception) if getattr(result, "exception", None) else None,
@@ -212,6 +218,7 @@ def agent_framework_messages_to_agui(messages: Iterable[ChatMessage]) -> List[Me
                 converted.append(
                     ToolMessage(
                         id=message_id,
+                        role="tool",
                         content=aggregated_text or "",
                         tool_call_id=_pick_tool_call_id(tool_calls),
                         name=author_name,

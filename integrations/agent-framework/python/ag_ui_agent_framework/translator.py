@@ -12,6 +12,8 @@ from ag_ui.core.events import (
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    ThinkingEndEvent,
+    ThinkingStartEvent,
     ThinkingTextMessageContentEvent,
     ThinkingTextMessageEndEvent,
     ThinkingTextMessageStartEvent,
@@ -56,6 +58,7 @@ class AgentFrameworkEventTranslator:
         self._tools: Dict[str, _ToolState] = {}
         self._current_message_id: Optional[str] = None
         self._thinking_active: bool = False
+        self._thinking_phase: bool = False
 
     def translate(self, update: AgentRunResponseUpdate) -> List[BaseEvent]:
         events: List[BaseEvent] = []
@@ -63,14 +66,14 @@ class AgentFrameworkEventTranslator:
         role = self._resolve_role(update.role)
         state = self._messages.setdefault(message_id, _MessageState(role=role))
 
+        text_chunk = getattr(update, "text", None)
+        if text_chunk:
+            events.extend(self._handle_text_chunk(message_id, state, text_chunk))
+
         for content in update.contents or []:
             if isinstance(content, TextReasoningContent):
                 events.extend(self._handle_reasoning(content))
                 continue
-
-            if self._thinking_active:
-                events.append(ThinkingTextMessageEndEvent())
-                self._thinking_active = False
 
             if isinstance(content, TextContent):
                 events.extend(self._handle_text_chunk(message_id, state, content.text or ""))
@@ -107,9 +110,7 @@ class AgentFrameworkEventTranslator:
     def finalize(self) -> List[BaseEvent]:
         events: List[BaseEvent] = []
 
-        if self._thinking_active:
-            events.append(ThinkingTextMessageEndEvent())
-            self._thinking_active = False
+        events.extend(self._end_thinking())
 
         for message_id, state in self._messages.items():
             if state.started and not state.closed:
@@ -132,7 +133,9 @@ class AgentFrameworkEventTranslator:
         if not chunk:
             return []
 
-        events: List[CustomEvent] = []
+        events: List[BaseEvent] = []
+        if self._thinking_active or self._thinking_phase:
+            events.extend(self._end_thinking())
         if not state.started:
             events.append(TextMessageStartEvent(message_id=message_id, role=state.role))
             state.started = True
@@ -143,7 +146,10 @@ class AgentFrameworkEventTranslator:
         text = content.text or ""
         if not text:
             return []
-        events: List[CustomEvent] = []
+        events: List[BaseEvent] = []
+        if not self._thinking_phase:
+            events.append(ThinkingStartEvent())
+            self._thinking_phase = True
         if not self._thinking_active:
             events.append(ThinkingTextMessageStartEvent())
             self._thinking_active = True
@@ -195,6 +201,16 @@ class AgentFrameworkEventTranslator:
             events.append(ToolCallEndEvent(tool_call_id=tool_id))
             tool_state.ended = True
 
+        return events
+
+    def _end_thinking(self) -> List[BaseEvent]:
+        events: List[BaseEvent] = []
+        if self._thinking_active:
+            events.append(ThinkingTextMessageEndEvent())
+            self._thinking_active = False
+        if self._thinking_phase:
+            events.append(ThinkingEndEvent())
+            self._thinking_phase = False
         return events
 
     def _resolve_message_id(self, update: AgentRunResponseUpdate) -> str:
