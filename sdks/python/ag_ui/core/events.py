@@ -3,14 +3,10 @@ This module contains the event types for the Agent User Interaction Protocol Pyt
 """
 
 from enum import Enum
-from typing import Annotated, Any, List, Literal, Optional, Union
-
+from typing import Any, List, Literal, Optional, Union, Annotated
 from pydantic import Field
 
-from .types import ConfiguredBaseModel, Message, State, Role
-
-# Text messages can have any role except "tool"
-TextMessageRole = Literal["developer", "system", "assistant", "user"]
+from .types import Message, State, ConfiguredBaseModel
 
 
 class EventType(str, Enum):
@@ -21,9 +17,6 @@ class EventType(str, Enum):
     TEXT_MESSAGE_CONTENT = "TEXT_MESSAGE_CONTENT"
     TEXT_MESSAGE_END = "TEXT_MESSAGE_END"
     TEXT_MESSAGE_CHUNK = "TEXT_MESSAGE_CHUNK"
-    THINKING_TEXT_MESSAGE_START = "THINKING_TEXT_MESSAGE_START"
-    THINKING_TEXT_MESSAGE_CONTENT = "THINKING_TEXT_MESSAGE_CONTENT"
-    THINKING_TEXT_MESSAGE_END = "THINKING_TEXT_MESSAGE_END"
     TOOL_CALL_START = "TOOL_CALL_START"
     TOOL_CALL_ARGS = "TOOL_CALL_ARGS"
     TOOL_CALL_END = "TOOL_CALL_END"
@@ -31,6 +24,9 @@ class EventType(str, Enum):
     TOOL_CALL_RESULT = "TOOL_CALL_RESULT"
     THINKING_START = "THINKING_START"
     THINKING_END = "THINKING_END"
+    THINKING_TEXT_MESSAGE_START = "THINKING_TEXT_MESSAGE_START"
+    THINKING_TEXT_MESSAGE_CONTENT = "THINKING_TEXT_MESSAGE_CONTENT"
+    THINKING_TEXT_MESSAGE_END = "THINKING_TEXT_MESSAGE_END"
     STATE_SNAPSHOT = "STATE_SNAPSHOT"
     STATE_DELTA = "STATE_DELTA"
     MESSAGES_SNAPSHOT = "MESSAGES_SNAPSHOT"
@@ -56,60 +52,80 @@ class TextMessageStartEvent(BaseEvent):
     """
     Event indicating the start of a text message.
     """
-    type: Literal[EventType.TEXT_MESSAGE_START] = EventType.TEXT_MESSAGE_START  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TEXT_MESSAGE_START] = Field(default=EventType.TEXT_MESSAGE_START)
     message_id: str
-    role: TextMessageRole = "assistant"
+    role: Literal["assistant"]
 
 
 class TextMessageContentEvent(BaseEvent):
     """
     Event containing a piece of text message content.
     """
-    type: Literal[EventType.TEXT_MESSAGE_CONTENT] = EventType.TEXT_MESSAGE_CONTENT  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TEXT_MESSAGE_CONTENT] = Field(default=EventType.TEXT_MESSAGE_CONTENT)
     message_id: str
-    delta: str = Field(min_length=1)
+    delta: str  # This should not be an empty string
+
+    def model_post_init(self, __context):
+        if len(self.delta) == 0:
+            raise ValueError("Delta must not be an empty string")
 
 
 class TextMessageEndEvent(BaseEvent):
     """
     Event indicating the end of a text message.
     """
-    type: Literal[EventType.TEXT_MESSAGE_END] = EventType.TEXT_MESSAGE_END  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TEXT_MESSAGE_END] = Field(default=EventType.TEXT_MESSAGE_END)
     message_id: str
 
 class TextMessageChunkEvent(BaseEvent):
     """
     Event containing a chunk of text message content.
     """
-    type: Literal[EventType.TEXT_MESSAGE_CHUNK] = EventType.TEXT_MESSAGE_CHUNK  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TEXT_MESSAGE_CHUNK] = Field(default=EventType.TEXT_MESSAGE_CHUNK)
     message_id: Optional[str] = None
-    role: Optional[TextMessageRole] = None
+    role: Optional[Literal["assistant"]] = None
     delta: Optional[str] = None
 
+
 class ThinkingTextMessageStartEvent(BaseEvent):
-    """
-    Event indicating the start of a thinking text message.
-    """
-    type: Literal[EventType.THINKING_TEXT_MESSAGE_START] = EventType.THINKING_TEXT_MESSAGE_START  # pyright: ignore[reportIncompatibleVariableOverride]
+    """Event indicating the start of a thinking phase for a text message."""
+
+    type: Literal[EventType.THINKING_TEXT_MESSAGE_START] = Field(default=EventType.THINKING_TEXT_MESSAGE_START)
+
 
 class ThinkingTextMessageContentEvent(BaseEvent):
-    """
-    Event indicating a piece of a thinking text message.
-    """
-    type: Literal[EventType.THINKING_TEXT_MESSAGE_CONTENT] = EventType.THINKING_TEXT_MESSAGE_CONTENT  # pyright: ignore[reportIncompatibleVariableOverride]
-    delta: str = Field(min_length=1)
+    """Event containing model reasoning content for a thinking phase."""
+
+    type: Literal[EventType.THINKING_TEXT_MESSAGE_CONTENT] = Field(default=EventType.THINKING_TEXT_MESSAGE_CONTENT)
+    delta: str
+
+    def model_post_init(self, __context):
+        if len(self.delta) == 0:
+            raise ValueError("Delta must not be an empty string")
+
 
 class ThinkingTextMessageEndEvent(BaseEvent):
-    """
-    Event indicating the end of a thinking text message.
-    """
-    type: Literal[EventType.THINKING_TEXT_MESSAGE_END] = EventType.THINKING_TEXT_MESSAGE_END  # pyright: ignore[reportIncompatibleVariableOverride]
+    """Event indicating the end of a thinking phase for a text message."""
+
+    type: Literal[EventType.THINKING_TEXT_MESSAGE_END] = Field(default=EventType.THINKING_TEXT_MESSAGE_END)
+
+
+class ThinkingStartEvent(BaseEvent):
+    """Event signalling the start of a broader thinking phase."""
+
+    type: Literal[EventType.THINKING_START] = Field(default=EventType.THINKING_START)
+
+
+class ThinkingEndEvent(BaseEvent):
+    """Event signalling the completion of a broader thinking phase."""
+
+    type: Literal[EventType.THINKING_END] = Field(default=EventType.THINKING_END)
 
 class ToolCallStartEvent(BaseEvent):
     """
     Event indicating the start of a tool call.
     """
-    type: Literal[EventType.TOOL_CALL_START] = EventType.TOOL_CALL_START  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TOOL_CALL_START] = Field(default=EventType.TOOL_CALL_START)
     tool_call_id: str
     tool_call_name: str
     parent_message_id: Optional[str] = None
@@ -119,7 +135,7 @@ class ToolCallArgsEvent(BaseEvent):
     """
     Event containing tool call arguments.
     """
-    type: Literal[EventType.TOOL_CALL_ARGS] = EventType.TOOL_CALL_ARGS  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TOOL_CALL_ARGS] = Field(default=EventType.TOOL_CALL_ARGS)
     tool_call_id: str
     delta: str
 
@@ -128,47 +144,34 @@ class ToolCallEndEvent(BaseEvent):
     """
     Event indicating the end of a tool call.
     """
-    type: Literal[EventType.TOOL_CALL_END] = EventType.TOOL_CALL_END  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TOOL_CALL_END] = Field(default=EventType.TOOL_CALL_END)
     tool_call_id: str
 
 class ToolCallChunkEvent(BaseEvent):
     """
     Event containing a chunk of tool call content.
     """
-    type: Literal[EventType.TOOL_CALL_CHUNK] = EventType.TOOL_CALL_CHUNK  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.TOOL_CALL_CHUNK] = Field(default=EventType.TOOL_CALL_CHUNK)
     tool_call_id: Optional[str] = None
     tool_call_name: Optional[str] = None
     parent_message_id: Optional[str] = None
     delta: Optional[str] = None
 
+
 class ToolCallResultEvent(BaseEvent):
-    """
-    Event containing the result of a tool call.
-    """
+    """Event containing the final result of a tool call."""
+
+    type: Literal[EventType.TOOL_CALL_RESULT] = Field(default=EventType.TOOL_CALL_RESULT)
     message_id: str
-    type: Literal[EventType.TOOL_CALL_RESULT] = EventType.TOOL_CALL_RESULT  # pyright: ignore[reportIncompatibleVariableOverride]
     tool_call_id: str
     content: str
-    role: Optional[Literal["tool"]] = None
-
-class ThinkingStartEvent(BaseEvent):
-    """
-    Event indicating the start of a thinking step event.
-    """
-    type: Literal[EventType.THINKING_START] = EventType.THINKING_START  # pyright: ignore[reportIncompatibleVariableOverride]
-    title: Optional[str] = None
-
-class ThinkingEndEvent(BaseEvent):
-    """
-    Event indicating the end of a thinking step event.
-    """
-    type: Literal[EventType.THINKING_END] = EventType.THINKING_END  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal["tool"]
 
 class StateSnapshotEvent(BaseEvent):
     """
     Event containing a snapshot of the state.
     """
-    type: Literal[EventType.STATE_SNAPSHOT] = EventType.STATE_SNAPSHOT  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.STATE_SNAPSHOT] = Field(default=EventType.STATE_SNAPSHOT)
     snapshot: State
 
 
@@ -176,7 +179,7 @@ class StateDeltaEvent(BaseEvent):
     """
     Event containing a delta of the state.
     """
-    type: Literal[EventType.STATE_DELTA] = EventType.STATE_DELTA  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.STATE_DELTA] = Field(default=EventType.STATE_DELTA)
     delta: List[Any]  # JSON Patch (RFC 6902)
 
 
@@ -184,7 +187,7 @@ class MessagesSnapshotEvent(BaseEvent):
     """
     Event containing a snapshot of the messages.
     """
-    type: Literal[EventType.MESSAGES_SNAPSHOT] = EventType.MESSAGES_SNAPSHOT  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.MESSAGES_SNAPSHOT] = Field(default=EventType.MESSAGES_SNAPSHOT)
     messages: List[Message]
 
 
@@ -192,7 +195,7 @@ class RawEvent(BaseEvent):
     """
     Event containing a raw event.
     """
-    type: Literal[EventType.RAW] = EventType.RAW  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.RAW] = Field(default=EventType.RAW)
     event: Any
     source: Optional[str] = None
 
@@ -201,7 +204,7 @@ class CustomEvent(BaseEvent):
     """
     Event containing a custom event.
     """
-    type: Literal[EventType.CUSTOM] = EventType.CUSTOM  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.CUSTOM] = Field(default=EventType.CUSTOM)
     name: str
     value: Any
 
@@ -210,7 +213,7 @@ class RunStartedEvent(BaseEvent):
     """
     Event indicating that a run has started.
     """
-    type: Literal[EventType.RUN_STARTED] = EventType.RUN_STARTED  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.RUN_STARTED] = Field(default=EventType.RUN_STARTED)
     thread_id: str
     run_id: str
 
@@ -219,7 +222,7 @@ class RunFinishedEvent(BaseEvent):
     """
     Event indicating that a run has finished.
     """
-    type: Literal[EventType.RUN_FINISHED] = EventType.RUN_FINISHED  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.RUN_FINISHED] = Field(default=EventType.RUN_FINISHED)
     thread_id: str
     run_id: str
     result: Optional[Any] = None
@@ -229,7 +232,7 @@ class RunErrorEvent(BaseEvent):
     """
     Event indicating that a run has encountered an error.
     """
-    type: Literal[EventType.RUN_ERROR] = EventType.RUN_ERROR  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.RUN_ERROR] = Field(default=EventType.RUN_ERROR)
     message: str
     code: Optional[str] = None
 
@@ -238,7 +241,7 @@ class StepStartedEvent(BaseEvent):
     """
     Event indicating that a step has started.
     """
-    type: Literal[EventType.STEP_STARTED] = EventType.STEP_STARTED  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.STEP_STARTED] = Field(default=EventType.STEP_STARTED)
     step_name: str
 
 
@@ -246,7 +249,7 @@ class StepFinishedEvent(BaseEvent):
     """
     Event indicating that a step has finished.
     """
-    type: Literal[EventType.STEP_FINISHED] = EventType.STEP_FINISHED  # pyright: ignore[reportIncompatibleVariableOverride]
+    type: Literal[EventType.STEP_FINISHED] = Field(default=EventType.STEP_FINISHED)
     step_name: str
 
 
@@ -256,6 +259,11 @@ Event = Annotated[
         TextMessageContentEvent,
         TextMessageEndEvent,
         TextMessageChunkEvent,
+        ThinkingTextMessageStartEvent,
+        ThinkingTextMessageContentEvent,
+        ThinkingTextMessageEndEvent,
+        ThinkingStartEvent,
+        ThinkingEndEvent,
         ToolCallStartEvent,
         ToolCallArgsEvent,
         ToolCallEndEvent,
