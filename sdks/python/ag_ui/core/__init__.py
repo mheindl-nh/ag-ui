@@ -20,6 +20,8 @@ from ag_ui.core.events import (
     StateSnapshotEvent,
     StateDeltaEvent,
     MessagesSnapshotEvent,
+    ActivitySnapshotEvent,
+    ActivityDeltaEvent,
     RawEvent,
     CustomEvent,
     RunStartedEvent,
@@ -39,12 +41,16 @@ from ag_ui.core.types import (
     AssistantMessage,
     UserMessage,
     ToolMessage,
+    ActivityMessage,
     Message,
     Role,
     Context,
     Tool,
     RunAgentInput,
-    State
+    State,
+    TextInputContent,
+    BinaryInputContent,
+    InputContent,
 )
 
 __all__ = [
@@ -66,6 +72,8 @@ __all__ = [
     "StateSnapshotEvent",
     "StateDeltaEvent",
     "MessagesSnapshotEvent",
+    "ActivitySnapshotEvent",
+    "ActivityDeltaEvent",
     "RawEvent",
     "CustomEvent",
     "RunStartedEvent",
@@ -83,10 +91,14 @@ __all__ = [
     "AssistantMessage",
     "UserMessage",
     "ToolMessage",
+    "ActivityMessage",
     "Message",
     "Role",
     "Context",
     "Tool",
     "RunAgentInput",
-    "State"
+    "State",
+    "TextInputContent",
+    "BinaryInputContent",
+    "InputContent",
 ]
