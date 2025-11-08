@@ -12,7 +12,7 @@ exclude = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.14"
+python = ">=3.13,<3.14"
 ag-ui-protocol = { git = "https://github.com/mheindl-nh/ag-ui.git", branch = "main", subdirectory = "sdks/python" }
 agent-framework = ">=1.0.0b251105"
 fastapi = "^0.115.12"
