@@ -16,7 +16,7 @@ python = ">=3.10,<3.14"
 ag-ui-protocol = { git = "https://github.com/mheindl-nh/ag-ui.git", branch = "main", subdirectory = "sdks/python" }
 agent-framework = ">=1.0.0b251105"
 fastapi = "^0.115.12"
-uvicorn = "^0.34.3"
+uvicorn = ">=0.38.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^8.3.3"
