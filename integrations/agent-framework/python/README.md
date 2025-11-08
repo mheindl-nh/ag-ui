@@ -46,6 +46,7 @@ Deploy the FastAPI app and point any AG-UI client at `/agent`. The adapter handl
 - ✅ State & message snapshots, run lifecycle events, and usage metrics as AG-UI custom events
 - ✅ Message conversion helpers between AG-UI and Agent Framework types
 - ✅ Configurable hooks for advanced scenarios (telemetry, custom transports)
+- ✅ Built-in adapter for `Workflow` integrations with automatic streaming synthesis
 
 ## Examples
 
@@ -62,6 +63,27 @@ poetry run python examples/basic_fastapi.py
 ```
 
 Then connect your AG-UI client to `http://localhost:8000/agent`.
+
+## Using Workflows
+
+The Agent Framework `Workflow` API does not expose the streaming-friendly `AgentProtocol` interface directly. Use the bundled adapter to bridge a workflow without writing custom glue code:
+
+```python
+from agent_framework import Workflow
+from ag_ui_agent_framework import AgentFrameworkRunner, workflow_agent
+
+workflow: Workflow = build_workflow_somehow()
+agent = workflow_agent(
+    workflow,
+    agent_id="medical-workflow",
+    name="MedicalWorkflow",
+    description="Routes medical questions through triage and responder agents.",
+)
+
+runner = AgentFrameworkRunner(agent)
+```
+
+The runner now falls back to a synthesized stream whenever `run_stream` is unavailable, so workflows still render real-time thinking indicators and message deltas inside AG-UI.
 
 ## Contributing
 
