@@ -13,7 +13,7 @@ exclude = [
 
 [tool.poetry.dependencies]
 python = ">=3.13,<3.14"
-ag-ui-protocol = { git = "https://github.com/mheindl-nh/ag-ui.git", branch = "main", subdirectory = "sdks/python" }
+ag-ui-protocol = "0.1.9"
 agent-framework = ">=1.0.0b251105"
 fastapi = "^0.115.12"
 uvicorn = ">=0.38.0"
