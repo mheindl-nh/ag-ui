@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from ag_ui.core import EventType
 from ag_ui.core.events import (
@@ -24,6 +24,7 @@ from ag_ui.core.events import (
 )
 from agent_framework import (
     AgentRunResponseUpdate,
+    FunctionApprovalRequestContent,
     FunctionCallContent,
     FunctionResultContent,
     Role,
@@ -57,6 +58,8 @@ class AgentFrameworkEventTranslator:
         self._messages: Dict[str, _MessageState] = {}
         self._tools: Dict[str, _ToolState] = {}
         self._current_message_id: Optional[str] = None
+        self._current_tool_call_id: Optional[str] = None
+        self._current_tool_call_name: Optional[str] = None
         self._thinking_active: bool = False
         self._thinking_phase: bool = False
 
@@ -67,16 +70,17 @@ class AgentFrameworkEventTranslator:
         state = self._messages.setdefault(message_id, _MessageState(role=role))
 
         text_chunk = getattr(update, "text", None)
-        if text_chunk:
-            events.extend(self._handle_text_chunk(message_id, state, text_chunk))
+        contents = list(update.contents or [])
+        handled_text_chunk = False
 
-        for content in update.contents or []:
+        for content in contents:
             if isinstance(content, TextReasoningContent):
                 events.extend(self._handle_reasoning(content))
                 continue
 
             if isinstance(content, TextContent):
                 events.extend(self._handle_text_chunk(message_id, state, content.text or ""))
+                handled_text_chunk = True
                 continue
 
             if isinstance(content, FunctionCallContent):
@@ -85,6 +89,10 @@ class AgentFrameworkEventTranslator:
 
             if isinstance(content, FunctionResultContent):
                 events.extend(self._handle_tool_result(message_id, content))
+                continue
+
+            if isinstance(content, FunctionApprovalRequestContent):
+                events.extend(self._handle_function_approval(content))
                 continue
 
             if isinstance(content, UsageContent):
@@ -104,6 +112,9 @@ class AgentFrameworkEventTranslator:
                     value=self._safe_json(content),
                 )
             )
+
+        if not handled_text_chunk and text_chunk:
+            events.extend(self._handle_text_chunk(message_id, state, text_chunk))
 
         return events
 
@@ -179,6 +190,9 @@ class AgentFrameworkEventTranslator:
                 events.append(ToolCallArgsEvent(tool_call_id=tool_id, delta=delta))
                 tool_state.arguments = arguments
 
+        self._current_tool_call_id = tool_id
+        self._current_tool_call_name = tool_state.name
+
         return events
 
     def _handle_tool_result(self, message_id: str, content: FunctionResultContent) -> List[BaseEvent]:
@@ -200,6 +214,41 @@ class AgentFrameworkEventTranslator:
         if not tool_state.ended:
             events.append(ToolCallEndEvent(tool_call_id=tool_id))
             tool_state.ended = True
+
+        return events
+
+    def _handle_function_approval(self, content: FunctionApprovalRequestContent) -> List[BaseEvent]:
+        call_id = content.function_call.call_id or str(uuid.uuid4())
+        tool_state = self._tools.setdefault(
+            call_id,
+            _ToolState(name=content.function_call.name or "tool", parent_message_id=self._current_message_id),
+        )
+
+        events: List[BaseEvent] = []
+
+        if not tool_state.ended:
+            events.append(ToolCallEndEvent(tool_call_id=call_id))
+            tool_state.ended = True
+        if self._current_tool_call_id == call_id:
+            self._current_tool_call_id = None
+            self._current_tool_call_name = None
+
+        payload = {
+            "id": content.id,
+            "function_call": {
+                "call_id": call_id,
+                "name": content.function_call.name,
+                "arguments": content.function_call.parse_arguments(),
+            },
+        }
+
+        events.append(
+            CustomEvent(
+                type=EventType.CUSTOM,
+                name="function_approval_request",
+                value=payload,
+            )
+        )
 
         return events
 

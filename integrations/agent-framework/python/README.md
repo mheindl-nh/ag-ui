@@ -54,6 +54,7 @@ Interactive examples live under `examples/`:
 
 - `examples/basic_fastapi.py` – Minimal FastAPI bridge with OpenAI chat client
 - `examples/tools_fastapi.py` – Tool calling workflow with streaming tool arguments
+- `examples/workflow_fastapi.py` – Planner/executor `Workflow` bridged via `workflow_agent`
 
 Install dev dependencies and run an example with Poetry:
 
@@ -85,6 +86,19 @@ runner = AgentFrameworkRunner(agent)
 
 The runner now falls back to a synthesized stream whenever `run_stream` is unavailable, so workflows still render real-time thinking indicators and message deltas inside AG-UI.
 
+## Forwarded props and thinking telemetry
+
+`AgentFrameworkRunner` accepts AG-UI forwarded props and splits them into `run_kwargs` and `additional_chat_options` before calling the underlying agent. This mirrors the behaviour of the LangGraph adapter, so features like model switches, system overrides, or custom streaming flags "just work" when you set them on the client request:
+
+```python
+forwarded_props={
+    "run_kwargs": {"temperature": 0},
+    "chat_options": {"response_format": {"type": "json_schema", "json_schema": schema}},
+}
+```
+
+Additionally, the translator converts `TextReasoningContent` into AG-UI `Thinking*` events so UI traces show the same reasoning indicators you see in the LangGraph integration.
+
 ## Contributing
 
 1. `poetry install`
@@ -92,3 +106,8 @@ The runner now falls back to a synthesized stream whenever `run_stream` is unava
 3. Submit a PR 💜
 
 Follow the [AG-UI contributing guide](https://github.com/ag-ui-protocol/ag-ui/blob/main/CONTRIBUTING.md) for repository-wide conventions.
+
+## Upstream compatibility notes
+
+- The official `agent_framework_ag_ui` package currently drops AG-UI `forwarded_props` before invoking the agent. Use the runner in this integration when you need to pass `run_kwargs` or `chat_options` through the transport.
+- The same package does not emit AG-UI thinking events for `TextReasoningContent`, so clients lose reasoning indicators. Our adapter translates those contents into the expected `Thinking*` events.

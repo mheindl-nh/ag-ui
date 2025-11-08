@@ -8,7 +8,8 @@ from typing import Annotated
 
 from fastapi import FastAPI
 from pydantic import Field
-from agent_framework import ChatAgent, OpenAIChatClient
+from agent_framework import ChatAgent
+from agent_framework.azure import AzureOpenAIChatClient
 
 from ag_ui_agent_framework import AgentFrameworkRunner, add_agent_framework_fastapi_endpoint
 
@@ -30,7 +31,11 @@ def get_weather(
 
 def _build_agent() -> ChatAgent:
     deployment = os.getenv("OPENAI_CHAT_MODEL_ID", "gpt-4o-mini")
-    client = OpenAIChatClient(model_id=deployment)
+    client = AzureOpenAIChatClient(
+        deployment_name=deployment,
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    )
     return ChatAgent(
         chat_client=client,
         name="tool-agent",

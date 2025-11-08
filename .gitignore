@@ -17,3 +17,5 @@ node_modules
 .pnpm-store
 
 **/.poetry-cache
+
+.venv
