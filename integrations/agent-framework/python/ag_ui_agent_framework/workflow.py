@@ -7,13 +7,15 @@ from agent_framework import (
     AgentExecutorRequest,
     AgentExecutorResponse,
     AgentProtocol,
+    AgentRunEvent,
     AgentRunResponse,
     AgentRunResponseUpdate,
+    AgentRunUpdateEvent,
     ChatMessage,
     Role,
     TextContent,
-    TextReasoningContent,
     Workflow,
+    WorkflowOutputEvent,
 )
 
 __all__ = ["WorkflowAgentAdapter", "workflow_agent"]
@@ -86,22 +88,61 @@ class WorkflowAgentAdapter(AgentProtocol):
         response_id = str(uuid.uuid4())
         request = AgentExecutorRequest(messages=chat_messages, should_respond=True)
 
-        yield AgentRunResponseUpdate(
-            response_id=response_id,
-            role=Role.ASSISTANT,
-            contents=[TextReasoningContent(text="Analyzing input...")],
-        )
+        streamed_updates: list[AgentRunResponseUpdate] = []
+        emitted_signatures: set[tuple[Any, ...]] = set()
 
-        workflow_result = await self._workflow.run(request, **run_kwargs)
-        outputs = self._collect_outputs(workflow_result)
+        def _emit(update: AgentRunResponseUpdate) -> bool:
+            signature = self._update_signature(update)
+            if signature in emitted_signatures:
+                return False
+            emitted_signatures.add(signature)
+            streamed_updates.append(update)
+            return True
 
-        if not outputs:
+        agent_final_response: AgentRunResponse | None = None
+        workflow_outputs: list[Any] = []
+
+        async for event in self._workflow.run_stream(request, **run_kwargs):
+            if isinstance(event, AgentRunUpdateEvent):
+                update = event.data
+                if update is None:
+                    continue
+                if update.response_id is None:
+                    update.response_id = response_id
+                if _emit(update):
+                    yield update
+                continue
+
+            if isinstance(event, AgentRunEvent):
+                agent_final_response = event.data
+                continue
+
+            if isinstance(event, WorkflowOutputEvent):
+                workflow_outputs.append(event.data)
+                continue
+
+        if agent_final_response is not None:
+            emitted_any = False
+            for update in self._build_updates(response_id, agent_final_response):
+                if _emit(update):
+                    emitted_any = True
+                    yield update
+            if emitted_any:
+                return
+
+        if workflow_outputs:
+            emitted_any = False
+            final_output = workflow_outputs[-1]
+            for update in self._build_updates(response_id, final_output):
+                if _emit(update):
+                    emitted_any = True
+                    yield update
+            if emitted_any:
+                return
+
+        # Ensure consumers receive a terminal chunk even if nothing was emitted.
+        if all(not (upd.text or upd.contents) for upd in streamed_updates):
             yield AgentRunResponseUpdate(response_id=response_id, role=Role.ASSISTANT, text="")
-            return
-
-        final_output = outputs[-1]
-        for update in self._build_updates(response_id, final_output):
-            yield update
 
     def _normalize_messages(self, messages: Any) -> list[ChatMessage] | None:
         if messages is None:
@@ -133,15 +174,36 @@ class WorkflowAgentAdapter(AgentProtocol):
             return result
         return [result]
 
+    def _update_signature(self, update: AgentRunResponseUpdate) -> tuple[Any, ...]:
+        contents_repr = tuple(
+            (
+                content.__class__.__name__,
+                getattr(content, "text", None),
+                repr(getattr(content, "arguments", None)),
+                repr(getattr(content, "result", None)),
+            )
+            for content in update.contents or []
+        )
+        return (
+            getattr(update, "role", None),
+            update.text,
+            contents_repr,
+            getattr(update, "author_name", None),
+            getattr(update, "message_id", None),
+        )
+
     def _build_updates(self, response_id: str, output: Any) -> Iterable[AgentRunResponseUpdate]:
         if isinstance(output, AgentExecutorResponse):
             agent_response = output.agent_run_response
             if agent_response.messages:
                 for message in agent_response.messages:
+                    contents = list(message.contents or [])
+                    if not contents and getattr(message, "text", None):
+                        contents = [TextContent(text=message.text)]
                     yield AgentRunResponseUpdate(
                         response_id=response_id,
                         role=message.role,
-                        contents=message.contents,
+                        contents=contents,
                         author_name=message.author_name,
                         message_id=message.message_id,
                     )
@@ -152,6 +214,29 @@ class WorkflowAgentAdapter(AgentProtocol):
                     role=Role.ASSISTANT,
                     text=agent_response.text,
                     contents=[TextContent(text=agent_response.text)],
+                )
+                return
+
+        if isinstance(output, AgentRunResponse):
+            if output.messages:
+                for message in output.messages:
+                    contents = list(message.contents or [])
+                    if not contents and getattr(message, "text", None):
+                        contents = [TextContent(text=message.text)]
+                    yield AgentRunResponseUpdate(
+                        response_id=response_id,
+                        role=message.role,
+                        contents=contents,
+                        author_name=message.author_name,
+                        message_id=message.message_id,
+                    )
+                return
+            if output.text:
+                yield AgentRunResponseUpdate(
+                    response_id=response_id,
+                    role=Role.ASSISTANT,
+                    text=output.text,
+                    contents=[TextContent(text=output.text)],
                 )
                 return
 
